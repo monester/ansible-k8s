@@ -1,0 +1,144 @@
+- hosts: localhost
+  tasks:
+    - name: deploy servers in Digital Ocean
+      digital_ocean:
+        name: '{{ item }}'
+        unique_name: yes
+        image_id : ubuntu-18-04-x64
+        size_id: s-1vcpu-2gb
+        region_id: ams3
+        state: present
+        command: droplet
+        ssh_key_ids: [1606867]
+        user_data: |
+          #!/bin/sh
+
+          apt-get update && apt-get install -y apt-transport-https ca-certificates curl software-properties-common python3 make
+
+          # install docker
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+          add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
+          apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 18.06 | head -1 | awk '{print $3}')
+
+          # install kubectl
+          curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+          echo deb http://apt.kubernetes.io/ kubernetes-xenial main | tee /etc/apt/sources.list.d/kubernetes.list
+          apt-get update && apt-get install -y kubelet kubeadm kubectl
+
+          # set kubernetes to hold
+          apt-mark hold kubelet kubeadm kubectl
+
+      register: do_hosts
+      with_items:
+        - kube-master
+        - kube-node02
+        - kube-node03
+      # async: 300
+      # poll: 0
+
+    # - name: 'Wait for all servers to be created'
+    #   async_status:
+    #     jid: "{{ item.ansible_job_id }}"
+    #   with_items: "{{ async_results.results }}"
+    #   register: do_hosts
+    #   until: do_hosts.finished
+    #   retries: 30
+    - name: create block storage for droplets
+      digital_ocean_block_storage:
+        command: create
+        state: present
+        volume_name: '{{ item.droplet.name }}-volume'
+        region: '{{ item.droplet.region.slug }}'
+        block_size: 10
+      with_items: '{{ do_hosts.results }}'
+
+    - name: attach block storage for droplets
+      digital_ocean_block_storage:
+        command: attach
+        state: present
+        volume_name: '{{ item.droplet.name }}-volume'
+        droplet_id: '{{ item.droplet.id }}'
+        region: '{{ item.droplet.region.slug }}'
+      with_items: '{{ do_hosts.results }}'
+
+    - add_host:
+        name: '{{ item.droplet.name }}'
+        ansible_hostname: '{{ item.droplet.name }}'
+        ansible_host: '{{ item.droplet.ip_address }}'
+        ansible_ssh_user: root
+        ansible_python_interpreter: python3
+        group: ['kube-all', 'ceph-all']
+      loop: '{{ do_hosts.results }}'
+
+- hosts: localhost-root
+  tasks:
+    - debug:
+        var: hostvars
+    - name: add nodes to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        regexp: '{{ hostvars[item]["ansible_hostname"] }}'
+        line: '{{ hostvars[item]["ansible_host"] }} {{ hostvars[item]["ansible_hostname"] }}'
+      loop: '{{ groups["kube-all"] }}'
+
+- hosts: kube-all
+  tasks:
+    - name: add nodes to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        regexp: '{{ hostvars[item]["ansible_hostname"] }}'
+        line: '{{ hostvars[item]["ansible_host"] }} {{ hostvars[item]["ansible_hostname"] }}'
+      loop: '{{ groups["kube-all"] }}'
+
+    - name: run kubeadm init
+      shell: |
+        kubeadm init --pod-network-cidr=192.168.0.0/16
+        mkdir -p $HOME/.kube
+        sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        sudo chown $(id -u):$(id -g) $HOME/.kube/config
+        kubectl apply -f https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+        kubectl apply -f https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+        kubectl taint nodes --all node-role.kubernetes.io/master-
+      when: ansible_hostname == 'kube-master'
+      args:
+        creates: /root/.kube/config
+
+    - include: playbook-ceph-deploy.yaml
+    # - include: playbook-helm.yaml
+    # - include: playbook-ceph-helm.yaml
+
+    - name: get join command
+      shell: kubeadm token create --print-join-command
+      register: join_command
+      when: ansible_hostname == 'kube-master'
+
+    - name: join nodes the cluster
+      shell: echo "{{ hostvars['kube-master']['join_command']['stdout'] }}" > /root/join-kube.sh; sh /root/join-kube.sh
+      when: ansible_hostname != 'kube-master'
+      args:
+        creates: /root/join-kube.sh
+
+
+
+
+# - hosts: kube-hosts
+#   tasks:
+#     - name: install docker gpg
+#     - name: install docker repo
+#     - name: install docker package
+#     - name: enable dokcer service
+#     - name: start dokcer service
+
+#     - name: install kubeadm gpg
+#     - name: install kubeadm repo
+#     - name: install kubeadm package
+
+# - hosts: kube-master
+#   tasks:
+#     - name: deploy k8s cluster
+#       command: kubeadm init
+
+# - hosts: kube-slave
+#   tasks:
+#     - name: deploy k8s cluster
+#       command: kubeadm join

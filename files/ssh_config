@@ -1,0 +1,5 @@
+{% for host in hostvars.values() %}
+Host {{ host.ansible_hostname }}
+   Hostname {{ host.ansible_host }}
+   User ceph-deploy
+{% endfor %}

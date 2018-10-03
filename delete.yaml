@@ -1,0 +1,39 @@
+- hosts: localhost
+  tasks:
+    - name: delete servers in Digital Ocean
+      digital_ocean:
+        name: '{{ item }}'
+        unique_name: yes
+        image_id : ubuntu-18-04-x64
+        size_id: s-1vcpu-2gb
+        region_id: ams3
+        state: absent
+        command: droplet
+        ssh_key_ids: [1606867]
+      with_items:
+        - kube-master
+        - kube-node01
+        - kube-node02
+        - kube-node03
+        - node01
+        - node02
+        - node03
+      # async: 300
+      # poll: 5
+
+    - name: create block storage for droplets
+      digital_ocean_block_storage:
+        command: create
+        state: absent
+        volume_name: '{{ item }}-volume'
+        region: ams3
+      with_items:
+        - kube-master
+        - kube-node01
+        - kube-node02
+        - kube-node03
+        - node01
+        - node02
+        - node03
+      # async: 300
+      # poll: 10

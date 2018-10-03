@@ -1,0 +1,31 @@
+- name: helm-serve service
+  blockinfile:
+    path: /etc/systemd/system/helm-serve.service
+    create: yes
+    block: |
+      [Unit]
+      Description=Helm serve
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=root
+      WorkingDirectory=/root
+      ExecStart=/usr/local/bin/helm serve
+      Restart=on-failure # or always, on-abort, etc
+
+      [Install]
+      WantedBy=multi-user.target
+  when: ansible_hostname == 'kube-master'
+
+- name: install helm
+  shell: |
+    curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
+    helm init
+    mkdir /var/lib/helm-repo
+
+    # enable helm serve service
+    systemctl daemon-reload
+    systemctl start helm-serve
+    systemctl enable helm-serve
+  when: ansible_hostname == 'kube-master'

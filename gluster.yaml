@@ -1,0 +1,19 @@
+- name: install gluster
+  shell: |
+    mkfs.xfs -i size=512 /dev/sda1
+    mkdir -p /data/brick1
+    echo '/dev/sda1 /data/brick1 xfs defaults 1 2' >> /etc/fstab
+    mount -a && mount
+
+    apt install -y glusterfs-server
+
+    systemctl enable glusterd
+    systemctl start glusterd
+    systemctl status glusterd
+
+    gluster peer probe kube-node02
+    gluster peer probe kube-node03
+
+    mkdir -p /data/brick1/gv0
+    gluster volume create gv0 replica 3 kube-master:/data/brick1/gv0 kube-node02:/data/brick1/gv0 kube-node03:/data/brick1/gv0
+    gluster volume start gv0

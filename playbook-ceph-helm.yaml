@@ -1,0 +1,30 @@
+- name: install ceph
+  shell: |
+    # Add helm repo
+    helm repo add local http://localhost:8879/charts
+
+    git clone https://github.com/ceph/ceph-helm
+    cd ceph-helm/ceph
+    make
+    kubectl create namespace ceph
+    kubectl create -f ~/ceph-helm/ceph/rbac.yaml
+    kubectl label node --overwrite=true kube-master ceph-mon=enabled ceph-mgr=enabled
+    kubectl label node --overwrite=true kube-node02                                   ceph-osd=enabled ceph-osd-device-dev-sda=enabled
+    kubectl label node --overwrite=true kube-node03                                   ceph-osd=enabled ceph-osd-device-dev-sda=enabled
+  when: ansible_hostname == 'kube-master'
+
+
+- name: create ceph overwrite
+  blockinfile:
+    path: /root/ceph-overrides.yaml
+    create: yes
+    block: |
+      osd_devices:
+        - name: dev-sda
+          device: /dev/sda
+          zap: "1"
+
+      storageclass:
+        name: ceph-rbd
+        pool: rbd
+        user_id: k8s
