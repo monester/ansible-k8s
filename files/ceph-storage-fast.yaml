@@ -10,10 +10,10 @@ parameters:
 
   pool: kube
   adminId: admin
-  adminSecretName: ceph-secret
+  adminSecretName: ceph-admin-secret
   adminSecretNamespace: "kube-system"
   userId: kube
-  userSecretName: ceph-secret-kube
+  userSecretName: ceph-user-secret
   userSecretNamespace: kube-system
   imageFormat: "2"
   imageFeatures: layering

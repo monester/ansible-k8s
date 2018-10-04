@@ -78,7 +78,7 @@
     ceph --cluster ceph auth get-key client.kube | tee /root/ceph-config/user-secret
     kubectl create secret generic ceph-user-secret --from-file=/root/ceph-config/user-secret --namespace=kube-system
   args:
-    creates: /root/ceph-config/admin-secret
+    creates: /root/ceph-config/user-secret
 
 - name: copy ceph-storage-fast.yaml
   template:
