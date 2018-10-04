@@ -21,7 +21,7 @@
       # async: 300
       # poll: 5
 
-    - name: create block storage for droplets
+    - name: delete block storage for droplets
       digital_ocean_block_storage:
         command: create
         state: absent

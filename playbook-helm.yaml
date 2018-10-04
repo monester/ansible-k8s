@@ -21,7 +21,7 @@
 - name: install helm
   shell: |
     curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
-    helm init
+    helm init --service-account tiller
     mkdir /var/lib/helm-repo
 
     # enable helm serve service

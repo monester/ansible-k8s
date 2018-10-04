@@ -6,13 +6,14 @@ metadata:
     storageclass.beta.kubernetes.io/is-default-class: "true"
 provisioner: ceph.com/rbd
 parameters:
-  monitors: {% for host in groups["ceph-all"] %}
-{{  hostvars[host].ansible_host }}:6789{%- if not loop.last %}, {% endif -%}
-{% endfor %}
+  monitors: {% for host in groups["ceph-all"] %}{{ hostvars[host].ansible_host }}:6789{% if not loop.last %}, {% endif %}{% endfor %}
 
+  pool: kube
   adminId: admin
   adminSecretName: ceph-secret
   adminSecretNamespace: "kube-system"
-  pool: kube
   userId: kube
   userSecretName: ceph-secret-kube
+  userSecretNamespace: kube-system
+  imageFormat: "2"
+  imageFeatures: layering
