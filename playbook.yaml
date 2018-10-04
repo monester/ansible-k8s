@@ -5,8 +5,9 @@
         name: '{{ item }}'
         unique_name: yes
         image_id : ubuntu-18-04-x64
-        size_id: s-2vcpu-4gb
+        # size_id: s-2vcpu-4gb
         # size_id: s-1vcpu-2gb
+        size_id: s-1vcpu-1gb
         region_id: ams3
         state: present
         command: droplet
@@ -35,7 +36,7 @@
       register: do_hosts
       with_items:
         - kube-master
-        - kube-node01
+        # - kube-node01
         - kube-node02
         - kube-node03
       # async: 300
@@ -181,6 +182,7 @@
 - hosts: kube-master
   tasks:
     - include: playbook-ceph-deploy.yaml
+    - include: playbook-helm.yaml
 
 
 # - hosts: kube-hosts
