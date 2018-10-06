@@ -1,0 +1,1 @@
+ifconfig $INTERFACE 10.0.0.{{ groups['kube-all'].index(ansible_host) + 1 }} netmask 255.255.255.0

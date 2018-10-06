@@ -1,0 +1,17 @@
+Address = {{ hostvars[item]['ansible_default_ipv4']['address'] }}
+Subnet = 10.0.0.{{ groups['kube-all'].index(item) + 1 }}/32
+
+
+-----BEGIN RSA PUBLIC KEY-----
+MIICCgKCAgEArgzTAP4MDVFLaDDAncUHJwDT94ozkjQfN5SEDcQIiGahkk4eb57w
+pagUVXsqa2pLbEHqHFMGS/5SvKVwV01KNQFFo9o9RCj1IRzKUxlQvQHmdmEbHbYu
+n6XaxfiHdD0FFhq/+tCT7dlXlot8bTmE0RytP6vECurR760WrkudEOSng8WNcVCV
+7KME2nmnpYi10WmpugGmHf0x6WEb0vfPxUqew/R96e9Uih66g7z/HFe1zpAue4PK
+dNjwGkZw3g8ct510Rfuw9nzU6l74cWWXO8rFnhsGJyu0V+gpTeiW5vjg5Q/S/Fut
+KALvj4NxeA++oHmS4Ve84yfL4nmwrtJOnW354wtJJubAG8bLujcBLoaLWCepcMH1
+sjunWI2GCc+SbgMcFI5qodUndFo/Cn4ZlSnG/O7zXsSNWohZsj+VVBqcevi1FDph
+WuH8+0c4SUxQGOx2Mz91RAMj8KjntvU3gS8iDsEDkhxjhL5B4lwuuVXXc4nq1an/
+GMa1o/bA3NWtLVcQqMktStiiilLZDQALyE/9rERISJceoXh1c0+hXpITSdKuXxXk
+o4n6okesTHFJLHhWeONqicNycVRJxU3LX46AkaBZnopuqWHncMNhQ+o1Ke2vQNkY
+oCyFbTFDtwV4J4auVY77si9wl0xNxMK3pVGUUxJ8TQdYSSx1mCJefAMCAwEAAQ==
+-----END RSA PUBLIC KEY-----

@@ -6,8 +6,8 @@
         unique_name: yes
         image_id : ubuntu-18-04-x64
         # size_id: s-2vcpu-4gb
-        # size_id: s-1vcpu-2gb
-        size_id: s-1vcpu-1gb
+        size_id: s-1vcpu-2gb
+        # size_id: s-1vcpu-1gb
         region_id: ams3
         state: present
         command: droplet
@@ -36,9 +36,11 @@
       register: do_hosts
       with_items:
         - kube-master
-        # - kube-node01
+        - kube-node01
         - kube-node02
         - kube-node03
+        - kube-node04
+        - kube-node05
       # async: 300
       # poll: 0
 
@@ -55,7 +57,7 @@
         state: present
         volume_name: '{{ item.droplet.name }}-volume'
         region: '{{ item.droplet.region.slug }}'
-        block_size: 30
+        block_size: 10
       with_items: '{{ do_hosts.results }}'
 
     - name: attach block storage for droplets
@@ -106,7 +108,7 @@
         sudo chown $(id -u):$(id -g) $HOME/.kube/config
         kubectl apply -f https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
         kubectl apply -f https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
-        kubectl taint nodes --all node-role.kubernetes.io/master-
+        # kubectl taint nodes --all node-role.kubernetes.io/master-
       args:
         creates: /root/.kube/config
 
@@ -184,6 +186,23 @@
     - include: playbook-ceph-deploy.yaml
     - include: playbook-helm.yaml
 
+# Install tinc to create private L2 between nodes
+- hosts: kube-all
+  tasks:
+- hosts: kube-all
+  tasks:
+    - apt: name=tinc state=present
+    - file: path=/etc/tinc/kube-ha state=directory
+    - file: path=/etc/tinc/kube-ha/hosts state=directory
+
+    - template: src=files/tinc/tinc.conf dest=/etc/tinc/kube-ha/tinc.conf
+    - template: src=files/tinc/hostname dest='/etc/tinc/kube-ha/hosts/{{ item|replace("-", "") }}'
+      with_items: '{{ groups["kube-all"] }}'
+    - copy: src=files/tinc/id_rsa dest=/etc/tinc/kube-ha/rsa_key.priv mode=0600
+    - template: src=files/tinc/tinc-up dest=/etc/tinc/kube-ha/tinc-up mode=0755
+    - copy: src=files/tinc/tinc-down dest=/etc/tinc/kube-ha/tinc-down mode=0755
+
+    - systemd: name=tinc@kube-ha state=started enabled=True
 
 # - hosts: kube-hosts
 #   tasks:

@@ -15,9 +15,8 @@
         - kube-node01
         - kube-node02
         - kube-node03
-        - node01
-        - node02
-        - node03
+        - kube-node04
+        - kube-node05
       # async: 300
       # poll: 5
 
@@ -32,8 +31,7 @@
         - kube-node01
         - kube-node02
         - kube-node03
-        - node01
-        - node02
-        - node03
+        - kube-node04
+        - kube-node05
       # async: 300
       # poll: 10
