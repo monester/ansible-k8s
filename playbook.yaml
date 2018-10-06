@@ -127,6 +127,16 @@
       args:
         creates: /root/join-kube.sh
 
+    - name: enable autocompletion
+      lineinfile:
+        path: /root/.bashrc
+        line: 'source <(kubectl completion bash)'
+
+    - name: add alias for kube-system
+      lineinfile:
+        path: /root/.bashrc
+        line: alias kube-system=kubectl --namespace kube-system
+
 - hosts: ceph-all
   tasks:
     - name: add ceph apt key
