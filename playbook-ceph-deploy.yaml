@@ -64,7 +64,6 @@
 
     - name: install new ceph cluster
       shell: ceph-deploy new kube-master
-      when: ansible_hostname == 'kube-master'
       become: yes
       become_user: ceph-deploy
       args:
