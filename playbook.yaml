@@ -1,4 +1,11 @@
 - hosts: localhost
+  vars:
+    install_node: kube-node01
+    all_nodes:
+      kube-node01: [kube-all, kube-master, ceph-all]
+      kube-node02: [kube-all, ceph-all]
+      kube-node03: [kube-all, ceph-all]
+
   tasks:
     - name: deploy servers in Digital Ocean
       digital_ocean:
@@ -23,24 +30,18 @@
           apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 18.06 | head -1 | awk '{print $3}')
 
           # install kubectl
-          curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-          echo deb http://apt.kubernetes.io/ kubernetes-xenial main | tee /etc/apt/sources.list.d/kubernetes.list
-          apt-get update && apt-get install -y kubelet kubeadm kubectl
+          # curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+          # echo  | tee /etc/apt/sources.list.d/kubernetes.list
+          # apt-get update && apt-get install -y kubelet kubeadm kubectl
 
           # set kubernetes to hold
-          apt-mark hold kubelet kubeadm kubectl
+          # apt-mark hold kubelet kubeadm kubectl
 
           # install Digital Ocean monitoring
-          curl -sSL https://agent.digitalocean.com/install.sh | sh
+          # curl -sSL https://agent.digitalocean.com/install.sh | sh
 
       register: do_hosts
-      with_items:
-        - kube-master
-        - kube-node01
-        - kube-node02
-        - kube-node03
-        - kube-node04
-        - kube-node05
+      with_items: '{{ all_nodes.keys()|sort }}'
       # async: 300
       # poll: 0
 
@@ -75,13 +76,14 @@
         ansible_host: '{{ item.droplet.ip_address }}'
         ansible_ssh_user: root
         ansible_python_interpreter: python3
-        group: ['kube-all', 'ceph-all']
+        group: '{{ all_nodes[item.droplet.name] }}'
       loop: '{{ do_hosts.results }}'
 
 - hosts: localhost-root
   tasks:
     - debug:
         var: hostvars
+
     - name: add nodes to /etc/hosts
       lineinfile:
         path: /etc/hosts
@@ -89,116 +91,14 @@
         line: '{{ hostvars[item]["ansible_host"] }} {{ hostvars[item]["ansible_hostname"] }}'
       loop: '{{ groups["kube-all"] }}'
 
-- hosts: kube-all
-  tasks:
-    - name: add nodes to /etc/hosts
+    - name: add nodes to /etc/ansible/hosts
       lineinfile:
-        path: /etc/hosts
-        regexp: '{{ hostvars[item]["ansible_hostname"] }}'
-        line: '{{ hostvars[item]["ansible_host"] }} {{ hostvars[item]["ansible_hostname"] }}'
+        path: /etc/ansible/hosts
+        regexp: '^{{ hostvars[item]["ansible_hostname"] }}'
+        line: '{{ hostvars[item]["ansible_hostname"] }} ansible_host={{ hostvars[item]["ansible_host"] }} ansible_user=root'
       loop: '{{ groups["kube-all"] }}'
-
-- hosts: kube-master
-  tasks:
-    - name: run kubeadm init
-      shell: |
-        kubeadm init --pod-network-cidr=192.168.0.0/16
-        mkdir -p $HOME/.kube
-        sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-        sudo chown $(id -u):$(id -g) $HOME/.kube/config
-        kubectl apply -f https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-        kubectl apply -f https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
-        # kubectl taint nodes --all node-role.kubernetes.io/master-
-      args:
-        creates: /root/.kube/config
-
-    # - include: playbook-helm.yaml
-    # - include: playbook-ceph-helm.yaml
-
-    - name: get join command
-      shell: kubeadm token create --print-join-command
-      register: join_command
-
-- hosts: kube-all
-  tasks:
-    - name: join nodes the cluster
-      shell: echo "{{ hostvars['kube-master']['join_command']['stdout'] }}" > /root/join-kube.sh; sh /root/join-kube.sh
-      when: ansible_hostname != 'kube-master'
-      args:
-        creates: /root/join-kube.sh
-
-    - name: enable autocompletion
-      lineinfile:
-        path: /root/.bashrc
-        line: 'source <(kubectl completion bash)'
-
-    - name: add alias for kube-system
-      lineinfile:
-        path: /root/.bashrc
-        line: alias kube-system=kubectl --namespace kube-system
-
-- hosts: ceph-all
-  tasks:
-    - name: add ceph apt key
-      apt_key:
-        url: https://download.ceph.com/keys/release.asc
-
-    - name: add ceph repo
-      apt_repository:
-        repo: deb https://download.ceph.com/debian-luminous/ {{ ansible_distribution_release }} main
-        state: present
-
-    - name: install ceph-deploy
-      apt: name=ceph-deploy state=present
-
-    - name: add ceph user
-      user:
-        name: ceph-deploy
-        home: /home/ceph-deploy
-        shell: /bin/bash
-
-    - name: create ceph .ssh directory
-      file:
-        path: /home/ceph-deploy/.ssh
-        state: directory
-        mode: 0700
-        owner: ceph-deploy
-        group: ceph-deploy
-
-    - name: 'Ceph copy .ssh files'
-      template:
-        src: files/ceph/{{ item }}
-        dest: /home/ceph-deploy/.ssh/{{ item }}
-        mode: 0600
-        owner: ceph-deploy
-        group: ceph-deploy
-      with_items: [config, id_rsa, id_rsa.pub, authorized_keys]
-      register: ssh_files
-
-    - name: 'CEPH: add ceph to sudoers'
-      lineinfile:
-        path: /etc/sudoers.d/ceph
-        line: "ceph-deploy ALL = (root) NOPASSWD:ALL"
-        mode: 0440
-        create: yes
-
-    - name: generate known_hosts file
-      shell: |
-        ssh-keyscan {{ item }} >> /home/ceph-deploy/.ssh/known_hosts
-        ssh-keyscan $(dig +short kube-master {{ item }}) >> /home/ceph-deploy/.ssh/known_hosts
-        chown ceph-deploy:ceph-deploy /home/ceph-deploy/.ssh/known_hosts
-        chmod 600 /home/ceph-deploy/.ssh/known_hosts
-      with_items: '{{ groups["ceph-all"] }}'
-      when: ssh_files.changed
-
-- hosts: kube-master
-  tasks:
-    - include: playbook-ceph-deploy.yaml
-    - include: playbook-helm.yaml
 
 # Install tinc to create private L2 between nodes
-- hosts: kube-all
-  tasks:
 - hosts: kube-all
   tasks:
     - apt: name=tinc state=present
@@ -214,24 +114,15 @@
 
     - systemd: name=tinc@kube-ha state=started enabled=True
 
-# - hosts: kube-hosts
-#   tasks:
-#     - name: install docker gpg
-#     - name: install docker repo
-#     - name: install docker package
-#     - name: enable dokcer service
-#     - name: start dokcer service
+- hosts: kube-all
+  tasks:
+    - name: add nodes to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        regexp: '{{ hostvars[item]["ansible_hostname"] }}'
+        line: '{{ hostvars[item]["ansible_host"] }} {{ hostvars[item]["ansible_hostname"] }}'
+      loop: '{{ groups["kube-all"] }}'
 
-#     - name: install kubeadm gpg
-#     - name: install kubeadm repo
-#     - name: install kubeadm package
+- import_playbook: playbook-ceph-deploy.yaml
 
-# - hosts: kube-master
-#   tasks:
-#     - name: deploy k8s cluster
-#       command: kubeadm init
-
-# - hosts: kube-slave
-#   tasks:
-#     - name: deploy k8s cluster
-#       command: kubeadm join
+- import_playbook: playbook-k8s.yaml

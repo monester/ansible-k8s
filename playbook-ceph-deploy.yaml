@@ -1,98 +1,154 @@
-- name: create ceph my-cluster directory
-  file:
-    path: /home/ceph-deploy/my-cluster
-    state: directory
-    mode: 0700
-    owner: ceph-deploy
-    group: ceph-deploy
+- hosts: ceph-all
+  tasks:
+    - name: add ceph apt key
+      apt_key:
+        url: https://download.ceph.com/keys/release.asc
 
-- name: install new ceph cluster
-  shell: ceph-deploy new kube-master
-  when: ansible_hostname == 'kube-master'
-  become: yes
-  become_user: ceph-deploy
-  args:
-    chdir: /home/ceph-deploy/my-cluster
-    creates: /home/ceph-deploy/my-cluster/ceph.conf
-  register: ceph_new_cluster
+    - name: add ceph repo
+      apt_repository:
+        repo: deb https://download.ceph.com/debian-luminous/ {{ ansible_distribution_release }} main
+        state: present
 
-- name: install ceph
-  shell: ceph-deploy install {{ groups["ceph-all"]|join(' ') }}
-  become: yes
-  become_user: ceph-deploy
-  args: { chdir: /home/ceph-deploy/my-cluster }
-  when: ceph_new_cluster.changed
+    - name: install ceph-deploy
+      apt: name=ceph-deploy state=present
 
-- name: install ceph
-  shell: ceph-deploy mon create-initial
-  become: yes
-  become_user: ceph-deploy
-  args: { chdir: /home/ceph-deploy/my-cluster }
-  when: ceph_new_cluster.changed
+    - name: add ceph user
+      user:
+        name: ceph-deploy
+        home: /home/ceph-deploy
+        shell: /bin/bash
 
-- name: install ceph
-  shell: ceph-deploy admin {{ groups["ceph-all"]|join(' ') }}
-  become: yes
-  become_user: ceph-deploy
-  args: { chdir: /home/ceph-deploy/my-cluster }
-  when: ceph_new_cluster.changed
+    - name: create ceph .ssh directory
+      file:
+        path: /home/ceph-deploy/.ssh
+        state: directory
+        mode: 0700
+        owner: ceph-deploy
+        group: ceph-deploy
 
-- name: install ceph
-  shell: ceph-deploy mgr create kube-master
-  become: yes
-  become_user: ceph-deploy
-  args: { chdir: /home/ceph-deploy/my-cluster }
-  when: ceph_new_cluster.changed
+    - name: 'Ceph copy .ssh files'
+      template:
+        src: files/ceph/{{ item }}
+        dest: /home/ceph-deploy/.ssh/{{ item }}
+        mode: 0600
+        owner: ceph-deploy
+        group: ceph-deploy
+      with_items: [config, id_rsa, id_rsa.pub, authorized_keys]
+      register: ssh_files
 
-- name: install ceph
-  shell: ceph-deploy osd create --data /dev/sda {{ item }}
-  become: yes
-  become_user: ceph-deploy
-  args: { chdir: /home/ceph-deploy/my-cluster }
-  with_items: '{{ groups["ceph-all"] }}'
-  when: ceph_new_cluster.changed
+    - name: 'CEPH: add ceph to sudoers'
+      lineinfile:
+        path: /etc/sudoers.d/ceph
+        line: "ceph-deploy ALL = (root) NOPASSWD:ALL"
+        mode: 0440
+        create: yes
 
-# K8S configuration
-- name: ceph - create kube pool
-  shell: |
-    ceph osd pool stats kube || ceph osd pool create kube 100 100
-    ceph osd pool application enable kube rbd
-  when: ceph_new_cluster.changed
+    - name: generate known_hosts file
+      shell: |
+        ssh-keyscan {{ item }} >> /home/ceph-deploy/.ssh/known_hosts
+        ssh-keyscan $(dig +short kube-master {{ item }}) >> /home/ceph-deploy/.ssh/known_hosts
+        chown ceph-deploy:ceph-deploy /home/ceph-deploy/.ssh/known_hosts
+        chmod 600 /home/ceph-deploy/.ssh/known_hosts
+      with_items: '{{ groups["ceph-all"] }}'
+      when: ssh_files.changed
 
-# Deploy Ceph StorageClass
-- name: create ceph-config directory
-  file:
-    path: /root/ceph-config
-    state: directory
+- hosts: kube-master
+  tasks:
+    - name: create ceph my-cluster directory
+      file:
+        path: /home/ceph-deploy/my-cluster
+        state: directory
+        mode: 0700
+        owner: ceph-deploy
+        group: ceph-deploy
 
-- name: Create a Ceph admin secret
-  shell: |
-    ceph auth get-key client.admin | tee /root/ceph-config/admin-secret
-    kubectl create secret generic ceph-admin-secret --from-file=/root/ceph-config/admin-secret --namespace=kube-system
-  args:
-    creates: /root/ceph-config/admin-secret
+    - name: install new ceph cluster
+      shell: ceph-deploy new kube-master
+      when: ansible_hostname == 'kube-master'
+      become: yes
+      become_user: ceph-deploy
+      args:
+        chdir: /home/ceph-deploy/my-cluster
+        creates: /home/ceph-deploy/my-cluster/ceph.conf
+      register: ceph_new_cluster
 
-- name: Create a Ceph Kube pool User secret
-  shell: |
-    ceph --cluster ceph auth get-or-create client.kube mon 'allow r' osd 'allow rwx pool=kube'
-    ceph --cluster ceph auth get-key client.kube | tee /root/ceph-config/user-secret
-    kubectl create secret generic ceph-user-secret --from-file=/root/ceph-config/user-secret --namespace=kube-system
-  args:
-    creates: /root/ceph-config/user-secret
+    - name: install ceph
+      shell: ceph-deploy install {{ groups["ceph-all"]|join(' ') }}
+      become: yes
+      become_user: ceph-deploy
+      args: { chdir: /home/ceph-deploy/my-cluster }
+      when: ceph_new_cluster.changed
 
-- name: copy ceph-storage-fast.yaml
-  template:
-    src: files/ceph-storage-fast.yaml
-    dest: /root/ceph-storage-fast.yaml
+    - name: install ceph
+      shell: ceph-deploy mon create-initial
+      become: yes
+      become_user: ceph-deploy
+      args: { chdir: /home/ceph-deploy/my-cluster }
+      when: ceph_new_cluster.changed
 
-- name: Deploy PersistentVolume StorageClass fast
-  shell: kubectl apply -f /root/ceph-storage-fast.yaml
+    - name: install ceph
+      shell: ceph-deploy admin {{ groups["ceph-all"]|join(' ') }}
+      become: yes
+      become_user: ceph-deploy
+      args: { chdir: /home/ceph-deploy/my-cluster }
+      when: ceph_new_cluster.changed
 
-# Deploy rbd-provisioner
-- name: copy rbd-provisioner roles and deployment
-  copy:
-    src: files/ceph/rbd.yaml
-    dest: /root/rbd.yaml
+    - name: install ceph
+      shell: ceph-deploy mgr create kube-master
+      become: yes
+      become_user: ceph-deploy
+      args: { chdir: /home/ceph-deploy/my-cluster }
+      when: ceph_new_cluster.changed
 
-- name: install rbd-provisioner to k8s cluster
-  shell: kubectl apply -n kube-system -f /root/rbd.yaml
+    - name: install ceph
+      shell: ceph-deploy osd create --data /dev/sda {{ item }}
+      become: yes
+      become_user: ceph-deploy
+      args: { chdir: /home/ceph-deploy/my-cluster }
+      with_items: '{{ groups["ceph-all"] }}'
+      when: ceph_new_cluster.changed
+
+    # K8S configuration
+    - name: ceph - create kube pool
+      shell: |
+        ceph osd pool stats kube || ceph osd pool create kube 100 100
+        ceph osd pool application enable kube rbd
+      when: ceph_new_cluster.changed
+
+    # Deploy Ceph StorageClass
+    - name: create ceph-config directory
+      file:
+        path: /root/ceph-config
+        state: directory
+
+    - name: Create a Ceph admin secret
+      shell: |
+        ceph auth get-key client.admin | tee /root/ceph-config/admin-secret
+        kubectl create secret generic ceph-admin-secret --from-file=/root/ceph-config/admin-secret --namespace=kube-system
+      args:
+        creates: /root/ceph-config/admin-secret
+
+    - name: Create a Ceph Kube pool User secret
+      shell: |
+        ceph --cluster ceph auth get-or-create client.kube mon 'allow r' osd 'allow rwx pool=kube'
+        ceph --cluster ceph auth get-key client.kube | tee /root/ceph-config/user-secret
+        kubectl create secret generic ceph-user-secret --from-file=/root/ceph-config/user-secret --namespace=kube-system
+      args:
+        creates: /root/ceph-config/user-secret
+
+    - name: copy ceph-storage-fast.yaml
+      template:
+        src: files/ceph-storage-fast.yaml
+        dest: /root/ceph-storage-fast.yaml
+
+    - name: Deploy PersistentVolume StorageClass fast
+      shell: kubectl apply -f /root/ceph-storage-fast.yaml
+
+    # Deploy rbd-provisioner
+    - name: copy rbd-provisioner roles and deployment
+      copy:
+        src: files/ceph/rbd.yaml
+        dest: /root/rbd.yaml
+
+    - name: install rbd-provisioner to k8s cluster
+      shell: kubectl apply -n kube-system -f /root/rbd.yaml
