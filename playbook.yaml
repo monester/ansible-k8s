@@ -28,9 +28,9 @@
           apt-get update && apt-get install -y apt-transport-https ca-certificates curl software-properties-common python3 make
 
           # install docker
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-          add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
-          apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 18.06 | head -1 | awk '{print $3}')
+          # curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+          # add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
+          # apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 18.06 | head -1 | awk '{print $3}')
 
           # set kubernetes to hold
           # apt-mark hold kubelet kubeadm kubectl
@@ -38,18 +38,20 @@
           # install Digital Ocean monitoring
           # curl -sSL https://agent.digitalocean.com/install.sh | sh
 
-      register: do_hosts
+      # register: do_hosts
       with_items: '{{ all_nodes.keys()|sort }}'
-      # async: 300
-      # poll: 0
+      register: async_results
+      async: 300
+      poll: 0
 
-    # - name: 'Wait for all servers to be created'
-    #   async_status:
-    #     jid: "{{ item.ansible_job_id }}"
-    #   with_items: "{{ async_results.results }}"
-    #   register: do_hosts
-    #   until: do_hosts.finished
-    #   retries: 30
+    - name: 'Wait for all servers to be created'
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      with_items: "{{ async_results.results }}"
+      register: do_hosts
+      until: do_hosts.finished
+      retries: 30
+
     - name: create block storage for droplets
       digital_ocean_block_storage:
         command: create
@@ -93,7 +95,7 @@
       lineinfile:
         path: /etc/ansible/hosts
         regexp: '^{{ hostvars[item]["ansible_hostname"] }}'
-        line: '{{ hostvars[item]["ansible_hostname"] }} ansible_host={{ hostvars[item]["ansible_host"] }} ansible_user=root'
+        line: '{{ hostvars[item]["ansible_hostname"] }} ansible_host={{ hostvars[item]["ansible_host"] }} ansible_user=root ansible_python_interpreter=/usr/bin/python3'
       loop: '{{ groups["kube-all"] }}'
 
 # Install tinc to create private L2 between nodes
