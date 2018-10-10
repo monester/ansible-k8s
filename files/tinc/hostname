@@ -1,5 +1,5 @@
 Address = {{ hostvars[item]['ansible_default_ipv4']['address'] }}
-Subnet = 10.0.0.{{ groups['kube-all'].index(item) + 1 }}/32
+Subnet = 10.3.0.{{ groups['kube-all'].index(item) + 1 }}/32
 
 
 -----BEGIN RSA PUBLIC KEY-----

@@ -1,0 +1,39 @@
+- hosts: '{{ groups["kube-master"][0] }}'
+  tasks:
+    # Deploy Ceph StorageClass
+    - name: create ceph-config directory
+      file:
+        path: /root/ceph-config
+        state: directory
+
+    - name: Create a Ceph admin secret
+      shell: |
+        ceph auth get-key client.admin | tee /root/ceph-config/admin-secret
+        kubectl create secret generic ceph-admin-secret --from-file=/root/ceph-config/admin-secret --namespace=kube-system
+      args:
+        creates: /root/ceph-config/admin-secret
+
+    - name: Create a Ceph Kube pool User secret
+      shell: |
+        ceph --cluster ceph auth get-or-create client.kube mon 'allow r' osd 'allow rwx pool=kube'
+        ceph --cluster ceph auth get-key client.kube | tee /root/ceph-config/user-secret
+        kubectl create secret generic ceph-user-secret --from-file=/root/ceph-config/user-secret --namespace=kube-system
+      args:
+        creates: /root/ceph-config/user-secret
+
+    - name: copy ceph-storage-fast.yaml
+      template:
+        src: files/ceph-storage-fast.yaml
+        dest: /root/ceph-storage-fast.yaml
+
+    - name: Deploy PersistentVolume StorageClass fast
+      shell: kubectl apply -f /root/ceph-storage-fast.yaml
+
+    # Deploy rbd-provisioner
+    - name: copy rbd-provisioner roles and deployment
+      copy:
+        src: files/ceph/rbd.yaml
+        dest: /root/rbd.yaml
+
+    - name: install rbd-provisioner to k8s cluster
+      shell: kubectl apply -n kube-system -f /root/rbd.yaml

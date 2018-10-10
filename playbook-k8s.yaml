@@ -1,0 +1,53 @@
+- hosts: kube-all
+  tasks:
+    - apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+
+    - apt_repository:
+        filename: kubernetes
+        repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+
+    - shell: apt-get install kubernetes-cni=0.6.0-00 || true
+
+    - name: install k8s packages
+      apt: name={{ item }} state='present'
+      with_items: [kubeadm, kubectl, kubelet]
+
+# - hosts: kube-master
+#   tasks:
+#     - name: run kubeadm init
+#       shell: |
+#         kubeadm init --pod-network-cidr=192.168.0.0/16
+#         mkdir -p $HOME/.kube
+#         sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+#         sudo chown $(id -u):$(id -g) $HOME/.kube/config
+#         kubectl apply -f https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+#         kubectl apply -f https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+#         # kubectl taint nodes --all node-role.kubernetes.io/master-
+#       args:
+#         creates: /root/.kube/config
+
+#     # - include: playbook-helm.yaml
+#     # - include: playbook-ceph-helm.yaml
+
+#     - name: get join command
+#       shell: kubeadm token create --print-join-command
+#       register: join_command
+
+# - hosts: kube-all
+#   tasks:
+#     - name: join nodes the cluster
+#       shell: echo "{{ hostvars['kube-master']['join_command']['stdout'] }}" > /root/join-kube.sh; sh /root/join-kube.sh
+#       when: ansible_hostname != 'kube-master'
+#       args:
+#         creates: /root/join-kube.sh
+
+#     - name: enable autocompletion
+#       lineinfile:
+#         path: /root/.bashrc
+#         line: 'source <(kubectl completion bash)'
+
+#     - name: add alias for kube-system
+#       lineinfile:
+#         path: /root/.bashrc
+#         line: alias kube-system=kubectl --namespace kube-system

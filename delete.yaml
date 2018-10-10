@@ -11,12 +11,12 @@
         command: droplet
         ssh_key_ids: [1606867]
       with_items:
-        - kube-master
         - kube-node01
         - kube-node02
         - kube-node03
         - kube-node04
         - kube-node05
+        - kube-node06
       # async: 300
       # poll: 5
 
@@ -27,11 +27,11 @@
         volume_name: '{{ item }}-volume'
         region: ams3
       with_items:
-        - kube-master
         - kube-node01
         - kube-node02
         - kube-node03
         - kube-node04
         - kube-node05
+        - kube-node06
       # async: 300
       # poll: 10

@@ -1,0 +1,14 @@
+- hosts:
+  - kube-node01
+  - kube-node02
+  - kube-node03
+  tasks:
+    - apt: name=keepalived state=present
+    - template:
+        src: files/keepalived.conf
+        dest: /etc/keepalived/keepalived.conf
+
+    - systemd:
+        name: keepalived
+        state: restarted
+        enabled: yes

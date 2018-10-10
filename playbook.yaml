@@ -5,6 +5,9 @@
       kube-node01: [kube-all, kube-master, ceph-all]
       kube-node02: [kube-all, ceph-all]
       kube-node03: [kube-all, ceph-all]
+      kube-node04: [kube-all, ceph-all]
+      kube-node05: [kube-all, ceph-all]
+      kube-node06: [kube-all, ceph-all]
 
   tasks:
     - name: deploy servers in Digital Ocean
@@ -28,11 +31,6 @@
           curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
           add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
           apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 18.06 | head -1 | awk '{print $3}')
-
-          # install kubectl
-          # curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-          # echo  | tee /etc/apt/sources.list.d/kubernetes.list
-          # apt-get update && apt-get install -y kubelet kubeadm kubectl
 
           # set kubernetes to hold
           # apt-mark hold kubelet kubeadm kubectl
@@ -123,6 +121,8 @@
         line: '{{ hostvars[item]["ansible_host"] }} {{ hostvars[item]["ansible_hostname"] }}'
       loop: '{{ groups["kube-all"] }}'
 
-- import_playbook: playbook-ceph-deploy.yaml
+# - import_playbook: playbook-ceph-deploy.yaml
 
-- import_playbook: playbook-k8s.yaml
+# - import_playbook: playbook-k8s.yaml
+
+# - import_playbook: playbook-ceph-cs.yaml
