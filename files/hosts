@@ -1,0 +1,11 @@
+localhost-root ansible_python_interpreter=/usr/bin/python3 ansible_user=root ansible_host=localhost
+{% for group in groups %}
+{% if group not in ['all', 'ungrouped'] %}
+[{{ group }}]
+{% for host in groups[group] %}
+{% if 'ansible_host' in hostvars[host] %}
+{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_user=root ip=10.3.0.{{ groups['kube-all'].index(host) + 1 }} ansible_python_interpreter=/usr/bin/python3 ansible_hostname={{ host }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
