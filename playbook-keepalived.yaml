@@ -4,11 +4,30 @@
   - kube-node03
   tasks:
     - apt: name=keepalived state=present
+
+    - lineinfile:
+        line: net.ipv4.ip_nonlocal_bind=1
+        path: /etc/sysctl.conf
+      register: updated_sysctl_ip_nonlocal_bind
+
+    - lineinfile:
+        line: net.ipv4.ip_forward=1
+        path: /etc/sysctl.conf
+      register: updated_sysctl_ip_forward
+
+    - shell: sysctl -p
+      when: updated_sysctl_ip_forward.changed or updated_sysctl_ip_nonlocal_bind.changed
+
     - template:
         src: files/keepalived.conf
         dest: /etc/keepalived/keepalived.conf
 
     - systemd:
         name: keepalived
+        state: restarted
+        enabled: yes
+
+    - systemd:
+        name: ipvsadm
         state: restarted
         enabled: yes

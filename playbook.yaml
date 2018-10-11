@@ -1,10 +1,11 @@
 - hosts: localhost
   vars:
     install_node: kube-node01
+    deploy_storage: no
     all_nodes:
-      kube-node01: [kube-all, kube-master, ceph-all]
-      kube-node02: [kube-all, ceph-all]
-      kube-node03: [kube-all, ceph-all]
+      kube-node01: [kube-all, etcd-cluster, ceph-all]
+      kube-node02: [kube-all, etcd-cluster, ceph-all]
+      kube-node03: [kube-all, etcd-cluster, ceph-all]
       kube-node04: [kube-all, ceph-all]
       kube-node05: [kube-all, ceph-all]
       kube-node06: [kube-all, ceph-all]
@@ -60,6 +61,7 @@
         region: '{{ item.droplet.region.slug }}'
         block_size: 10
       with_items: '{{ do_hosts.results }}'
+      when: deploy_storage
 
     - name: attach block storage for droplets
       digital_ocean_block_storage:
@@ -69,6 +71,7 @@
         droplet_id: '{{ item.droplet.id }}'
         region: '{{ item.droplet.region.slug }}'
       with_items: '{{ do_hosts.results }}'
+      when: deploy_storage
 
     - add_host:
         name: '{{ item.droplet.name }}'
@@ -98,6 +101,12 @@
         line: '{{ hostvars[item]["ansible_hostname"] }} ansible_host={{ hostvars[item]["ansible_host"] }} ansible_user=root ansible_python_interpreter=/usr/bin/python3'
       loop: '{{ groups["kube-all"] }}'
 
+    - name: generate new /etc/ansible/hosts
+      template:
+        src: files/hosts
+        dest: /etc/ansible/hosts-test
+
+
 # Install tinc to create private L2 between nodes
 - hosts: kube-all
   tasks:
@@ -116,6 +125,17 @@
 
 - hosts: kube-all
   tasks:
+    - copy:
+        src: files/{{ item }}
+        dest: /root/.ssh/{{ item }}
+      with_items:
+        - id_rsa
+        - id_rsa.pub
+
+    - lineinfile:
+        line: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD0TGppVtuYRFIVct9iT6XBvbZYUcclaZ4rvqLbKdFZ9+SyJh9xe6m+SDsQAsG87cdfjp4ZrpJOHPPk+Xe2iuTr2Ozbiaw4BnMJ2cVw9Bd4gJ3GtvXd2lD052YEtfkw1EBtCoZ01vbe7kUMwT00uPoXatTIHk0aRQ7kMd5qmLDPAVxkGBzxCgq8KdjefyrLHtoLGNsf8XUd59udufZOi/UNs28ow60zvr6CbLbAd4L6Ud7jtNOYSm3h1t454D9V2DaBxt1FgwzTQLBKpR3JQHxOTv5u7zUfb9SWSJ9kWVnf8ggaR7lcJA+H29yo+jANYPkz+kxj+xZhcrrF8EIEWKuF m@f29'
+        path: /root/.ssh/authorized_keys
+
     - name: add nodes to /etc/hosts
       lineinfile:
         path: /etc/hosts

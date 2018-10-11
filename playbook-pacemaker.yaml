@@ -1,0 +1,54 @@
+- hosts: etcd-cluster
+  tasks:
+    - lineinfile:
+        line: net.ipv4.ip_nonlocal_bind=1
+        path: /etc/sysctl.conf
+      register: updated_sysctl_ip_nonlocal_bind
+
+    - lineinfile:
+        line: net.ipv4.ip_forward=1
+        path: /etc/sysctl.conf
+      register: updated_sysctl_ip_forward
+
+    - shell: sysctl -p
+      when: updated_sysctl_ip_forward.changed or updated_sysctl_ip_nonlocal_bind.changed
+
+    - apt: name=haproxy state=present
+    - copy:
+        src: files/haproxy.cfg
+        dest: /etc/haproxy/haproxy.cfg
+
+    - service: name=haproxy state=restarted enabled=yes
+
+- hosts: etcd-cluster
+  tasks:
+    - apt:
+        name: ['pacemaker','corosync','pcs','psmisc']
+        state: present
+
+    - user:
+        name: hacluster
+        password: $6$dvC6P6K8CX2kAoCW$sJTtTh.FaKyO9cU5BrviBtzNY4c3u7kjlnv183a.5Hu6QBmfEHJCJiW8N2xSjfNiSS5m6fMmS1NBWKh77oHDX/
+
+    - shell: pcs cluster auth {{ item }} -u hacluster -p aeVibah3sheijoh5
+      with_items: '{{ groups["etcd-cluster"] }}'
+
+- hosts: etcd-cluster[0]
+  tasks:
+    - shell: pcs cluster status
+      register: cluster_status
+      ignore_errors: yes
+
+    - shell: pcs cluster setup --name mycluster {{ groups['etcd-cluster'] | join(' ') }} --force
+      when: cluster_status.failed
+
+- hosts: etcd-cluster
+  tasks:
+    - shell: pcs cluster start
+
+    - shell: pcs property set stonith-enabled=false
+
+- hosts: etcd-cluster[0]
+  tasks:
+    - shell: pcs resource create ClusterIP ocf:heartbeat:IPaddr2 ip=10.3.0.100 cidr_netmask=24 op monitor interval=30s
+
