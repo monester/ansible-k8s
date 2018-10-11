@@ -1,7 +1,7 @@
 - hosts: localhost
   vars:
     install_node: kube-node01
-    deploy_storage: no
+    deploy_storage: yes
     all_nodes:
       kube-node01: [kube-all, etcd-cluster, ceph-all]
       kube-node02: [kube-all, etcd-cluster, ceph-all]
@@ -111,6 +111,7 @@
 - hosts: kube-all
   tasks:
     - apt: name=tinc state=present
+      retries: 30
     - file: path=/etc/tinc/kube-ha state=directory
     - file: path=/etc/tinc/kube-ha/hosts state=directory
 
@@ -143,7 +144,7 @@
         line: '{{ hostvars[item]["ansible_host"] }} {{ hostvars[item]["ansible_hostname"] }}'
       loop: '{{ groups["kube-all"] }}'
 
-# - import_playbook: playbook-ceph-deploy.yaml
+ - import_playbook: playbook-ceph-deploy.yaml
 
 # - import_playbook: playbook-k8s.yaml
 

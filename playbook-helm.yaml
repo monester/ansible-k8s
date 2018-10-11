@@ -17,14 +17,15 @@
 #       [Install]
 #       WantedBy=multi-user.target
 #   when: ansible_hostname == 'kube-master'
-- name: copy RBAC for tiller
-  copy:
-    src: files/tiller-rbac-config.yaml
-    dest: /root/tiller-rbac-config
+- hosts: kube-all[0]
+  tasks:
+    - name: copy RBAC for tiller
+      copy:
+        src: files/tiller-rbac-config.yaml
+        dest: /root/tiller-rbac-config
 
-- name: install helm
-  shell: |
-    kubectl apply -f /root/tiller-rbac-config
-    curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
-    helm init --service-account tiller
-
+    - name: install helm
+      shell: |
+        kubectl apply -f /root/tiller-rbac-config
+        curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
+        helm init --service-account tiller
