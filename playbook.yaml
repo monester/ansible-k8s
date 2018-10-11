@@ -144,7 +144,7 @@
         line: '{{ hostvars[item]["ansible_host"] }} {{ hostvars[item]["ansible_hostname"] }}'
       loop: '{{ groups["kube-all"] }}'
 
- - import_playbook: playbook-ceph-deploy.yaml
+- import_playbook: playbook-ceph-deploy.yaml
 
 # - import_playbook: playbook-k8s.yaml
 
